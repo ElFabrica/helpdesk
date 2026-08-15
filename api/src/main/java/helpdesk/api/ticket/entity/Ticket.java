@@ -106,4 +106,8 @@ public class Ticket {
         this.requester = requester;
         this.responsible = responsible;
     }
+
+    public void markClassificationAsManual() {
+        this.classificationOrigin = ClassificationOrigin.MANUAL;
+    }
 }

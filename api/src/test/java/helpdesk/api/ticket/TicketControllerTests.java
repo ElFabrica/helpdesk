@@ -14,6 +14,7 @@ import helpdesk.api.ticket.entity.Ticket;
 import helpdesk.api.ticket.entity.TicketCategory;
 import helpdesk.api.ticket.entity.TicketPriority;
 import helpdesk.api.ticket.entity.TicketStatus;
+import helpdesk.api.ticket.repository.TicketCommentRepository;
 import helpdesk.api.ticket.repository.TicketRepository;
 import helpdesk.api.user.entity.User;
 import helpdesk.api.user.entity.UserRole;
@@ -39,6 +40,9 @@ class TicketControllerTests {
 
     @Autowired
     private TicketRepository ticketRepository;
+
+    @Autowired
+    private TicketCommentRepository ticketCommentRepository;
 
     @Autowired
     private JwtTokenService jwtTokenService;
@@ -229,6 +233,72 @@ class TicketControllerTests {
     }
 
     @Test
+    void adminCorrectsTicketClassification() throws Exception {
+        User admin = saveUser("Ana Admin", "ana-classification-controller@example.com", UserRole.ADMIN);
+        User requester = saveUser("Maria Solicitante", "maria-classification-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicketWithOrigin(
+                "Sistema lento",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                ClassificationOrigin.IA,
+                requester
+        );
+
+        mockMvc.perform(patch("/api/tickets/{id}/classification", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "REDE",
+                                  "priority": "MEDIA"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.category").value(TicketCategory.REDE.name()))
+                .andExpect(jsonPath("$.priority").value(TicketPriority.MEDIA.name()))
+                .andExpect(jsonPath("$.classificationOrigin").value(ClassificationOrigin.MANUAL.name()));
+
+        assertThat(ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId()))
+                .extracting(comment -> comment.getText())
+                .containsExactly("Classificacao alterada de SOFTWARE/ALTA para REDE/MEDIA");
+    }
+
+    @Test
+    void requesterCannotCorrectTicketClassification() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-forbidden-classification-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(patch("/api/tickets/{id}/classification", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "REDE",
+                                  "priority": "MEDIA"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateTicketClassificationReturnsBadRequestForInvalidCategory() throws Exception {
+        User admin = saveUser("Ana Admin", "ana-invalid-classification-controller@example.com", UserRole.ADMIN);
+        User requester = saveUser("Maria Solicitante", "maria-invalid-classification-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(patch("/api/tickets/{id}/classification", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "category": "INVALIDA",
+                                  "priority": "MEDIA"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void requesterCancelsOwnTicket() throws Exception {
         User requester = saveUser("Maria Solicitante", "maria-cancel-controller@example.com", UserRole.SOLICITANTE);
         Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
@@ -255,12 +325,22 @@ class TicketControllerTests {
             TicketPriority priority,
             User requester
     ) {
+        return saveTicketWithOrigin(title, category, priority, ClassificationOrigin.MANUAL, requester);
+    }
+
+    private Ticket saveTicketWithOrigin(
+            String title,
+            TicketCategory category,
+            TicketPriority priority,
+            ClassificationOrigin classificationOrigin,
+            User requester
+    ) {
         return ticketRepository.saveAndFlush(new Ticket(
                 title,
                 "Descricao do chamado",
                 category,
                 priority,
-                ClassificationOrigin.MANUAL,
+                classificationOrigin,
                 requester,
                 null
         ));

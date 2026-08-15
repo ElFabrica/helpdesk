@@ -7,6 +7,7 @@ import helpdesk.api.auth.service.JwtTokenService;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
+import helpdesk.api.ticket.dto.UpdateTicketClassificationRequestDTO;
 import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.ClassificationOrigin;
 import helpdesk.api.ticket.entity.Ticket;
@@ -240,6 +241,70 @@ class TicketServiceTests {
                 });
     }
 
+    @Test
+    void adminCorrectsClassificationAndCreatesHistoryEvent() {
+        User admin = saveUser("Ana Admin", "ana-classification-service@example.com", UserRole.ADMIN);
+        User requester = saveUser("Maria Solicitante", "maria-classification-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicketWithOrigin(
+                "Sistema lento",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                ClassificationOrigin.IA,
+                requester
+        );
+        authenticateAs(admin);
+
+        TicketResponseDTO response = ticketService.updateClassification(
+                ticket.getId(),
+                new UpdateTicketClassificationRequestDTO(TicketCategory.REDE, TicketPriority.MEDIA)
+        );
+
+        assertThat(response.category()).isEqualTo(TicketCategory.REDE);
+        assertThat(response.priority()).isEqualTo(TicketPriority.MEDIA);
+        assertThat(response.classificationOrigin()).isEqualTo(ClassificationOrigin.MANUAL);
+        assertThat(ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId()))
+                .extracting(TicketComment::getText)
+                .containsExactly("Classificacao alterada de SOFTWARE/ALTA para REDE/MEDIA");
+    }
+
+    @Test
+    void adminAcceptsClassificationWithoutChangingOriginOrCreatingHistory() {
+        User admin = saveUser("Ana Admin", "ana-accept-classification-service@example.com", UserRole.ADMIN);
+        User requester = saveUser("Maria Solicitante", "maria-accept-classification-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicketWithOrigin(
+                "Sistema lento",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                ClassificationOrigin.IA,
+                requester
+        );
+        authenticateAs(admin);
+
+        TicketResponseDTO response = ticketService.updateClassification(
+                ticket.getId(),
+                new UpdateTicketClassificationRequestDTO(TicketCategory.SOFTWARE, TicketPriority.ALTA)
+        );
+
+        assertThat(response.category()).isEqualTo(TicketCategory.SOFTWARE);
+        assertThat(response.priority()).isEqualTo(TicketPriority.ALTA);
+        assertThat(response.classificationOrigin()).isEqualTo(ClassificationOrigin.IA);
+        assertThat(ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId())).isEmpty();
+    }
+
+    @Test
+    void requesterCannotCorrectClassification() {
+        User requester = saveUser("Maria Solicitante", "maria-forbidden-classification-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(requester);
+
+        assertThatThrownBy(() -> ticketService.updateClassification(
+                ticket.getId(),
+                new UpdateTicketClassificationRequestDTO(TicketCategory.REDE, TicketPriority.MEDIA)
+        ))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
     @ParameterizedTest
     @CsvSource({
             "ABERTO, EM_ANDAMENTO",
@@ -373,12 +438,22 @@ class TicketServiceTests {
             TicketPriority priority,
             User requester
     ) {
+        return saveTicketWithOrigin(title, category, priority, ClassificationOrigin.MANUAL, requester);
+    }
+
+    private Ticket saveTicketWithOrigin(
+            String title,
+            TicketCategory category,
+            TicketPriority priority,
+            ClassificationOrigin classificationOrigin,
+            User requester
+    ) {
         return ticketRepository.saveAndFlush(new Ticket(
                 title,
                 "Descricao do chamado",
                 category,
                 priority,
-                ClassificationOrigin.MANUAL,
+                classificationOrigin,
                 requester,
                 null
         ));

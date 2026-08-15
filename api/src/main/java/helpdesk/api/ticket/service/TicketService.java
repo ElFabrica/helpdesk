@@ -5,6 +5,7 @@ import helpdesk.api.auth.service.AuthenticatedUserService;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
+import helpdesk.api.ticket.dto.UpdateTicketClassificationRequestDTO;
 import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.Ticket;
 import helpdesk.api.ticket.entity.TicketCategory;
@@ -115,6 +116,16 @@ public class TicketService {
     }
 
     @Transactional
+    public TicketResponseDTO updateClassification(Long id, UpdateTicketClassificationRequestDTO request) {
+        Ticket ticket = findTicket(id);
+        ticketAuthorizationService.assertCanCorrectClassification();
+
+        applyClassificationUpdate(ticket, request.category(), request.priority());
+
+        return TicketResponseDTO.from(ticketRepository.saveAndFlush(ticket));
+    }
+
+    @Transactional
     public void cancel(Long id) {
         Ticket ticket = findTicket(id);
         ticketAuthorizationService.assertCanCancel(ticket);
@@ -143,17 +154,39 @@ public class TicketService {
     }
 
     private void applyAdminUpdates(Ticket ticket, UpdateTicketRequestDTO request) {
-        if (request.priority() != null) {
-            ticket.setPriority(request.priority());
-        }
-
-        if (request.category() != null) {
-            ticket.setCategory(request.category());
-        }
+        applyClassificationUpdate(ticket, request.category(), request.priority());
 
         if (request.responsibleId() != null) {
             ticket.setResponsible(findUser(request.responsibleId()));
         }
+    }
+
+    private void applyClassificationUpdate(
+            Ticket ticket,
+            TicketCategory requestedCategory,
+            TicketPriority requestedPriority
+    ) {
+        TicketCategory newCategory = requestedCategory == null ? ticket.getCategory() : requestedCategory;
+        TicketPriority newPriority = requestedPriority == null ? ticket.getPriority() : requestedPriority;
+
+        if (ticket.getCategory() == newCategory && ticket.getPriority() == newPriority) {
+            return;
+        }
+
+        TicketCategory previousCategory = ticket.getCategory();
+        TicketPriority previousPriority = ticket.getPriority();
+
+        ticket.setCategory(newCategory);
+        ticket.setPriority(newPriority);
+        ticket.markClassificationAsManual();
+        ticketCommentRepository.save(new TicketComment(
+                ticket,
+                authenticatedUserService.getAuthenticatedUserEntity(),
+                "Classificacao alterada de "
+                        + previousCategory + "/" + previousPriority
+                        + " para "
+                        + newCategory + "/" + newPriority
+        ));
     }
 
     private User findUser(Long id) {

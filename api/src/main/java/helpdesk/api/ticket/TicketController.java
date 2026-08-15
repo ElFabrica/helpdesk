@@ -3,6 +3,7 @@ package helpdesk.api.ticket;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
+import helpdesk.api.ticket.dto.UpdateTicketClassificationRequestDTO;
 import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.TicketCategory;
 import helpdesk.api.ticket.entity.TicketPriority;
@@ -58,6 +59,14 @@ public class TicketController {
             @Valid @RequestBody UpdateTicketRequestDTO request
     ) {
         return ticketService.update(id, request);
+    }
+
+    @PatchMapping("/{id}/classification")
+    public TicketResponseDTO updateClassification(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTicketClassificationRequestDTO request
+    ) {
+        return ticketService.updateClassification(id, request);
     }
 
     @DeleteMapping("/{id}")
