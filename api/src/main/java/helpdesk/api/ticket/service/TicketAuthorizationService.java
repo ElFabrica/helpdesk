@@ -1,7 +1,8 @@
-package helpdesk.api.ticket;
+package helpdesk.api.ticket.service;
 
 import helpdesk.api.auth.AuthenticatedUser;
-import helpdesk.api.auth.AuthenticatedUserService;
+import helpdesk.api.auth.service.AuthenticatedUserService;
+import helpdesk.api.ticket.entity.Ticket;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;

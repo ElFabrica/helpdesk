@@ -1,6 +1,7 @@
-package helpdesk.api.auth;
+package helpdesk.api.auth.service;
 
-import helpdesk.api.user.User;
+import helpdesk.api.auth.JwtProperties;
+import helpdesk.api.user.entity.User;
 import java.time.Clock;
 import java.time.Instant;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;

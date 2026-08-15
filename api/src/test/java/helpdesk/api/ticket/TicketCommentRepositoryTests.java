@@ -2,9 +2,16 @@ package helpdesk.api.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.ticket.entity.ClassificationOrigin;
+import helpdesk.api.ticket.entity.Ticket;
+import helpdesk.api.ticket.entity.TicketCategory;
+import helpdesk.api.ticket.entity.TicketComment;
+import helpdesk.api.ticket.entity.TicketPriority;
+import helpdesk.api.ticket.repository.TicketCommentRepository;
+import helpdesk.api.ticket.repository.TicketRepository;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.entity.UserRole;
+import helpdesk.api.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import org.junit.jupiter.api.Test;

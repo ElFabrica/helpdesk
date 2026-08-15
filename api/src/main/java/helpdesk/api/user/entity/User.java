@@ -1,4 +1,4 @@
-package helpdesk.api.user;
+package helpdesk.api.user.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

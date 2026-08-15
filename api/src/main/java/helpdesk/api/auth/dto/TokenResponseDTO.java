@@ -1,4 +1,4 @@
-package helpdesk.api.auth;
+package helpdesk.api.auth.dto;
 
 public record TokenResponseDTO(String token, String type) {
 

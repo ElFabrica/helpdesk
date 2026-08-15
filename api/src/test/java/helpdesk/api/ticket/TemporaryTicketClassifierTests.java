@@ -2,6 +2,11 @@ package helpdesk.api.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import helpdesk.api.ticket.entity.ClassificationOrigin;
+import helpdesk.api.ticket.entity.TicketCategory;
+import helpdesk.api.ticket.entity.TicketPriority;
+import helpdesk.api.ticket.service.TemporaryTicketClassifier;
+import helpdesk.api.ticket.service.TicketClassification;
 import org.junit.jupiter.api.Test;
 
 class TemporaryTicketClassifierTests {

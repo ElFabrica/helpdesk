@@ -1,8 +1,8 @@
 package helpdesk.api.config;
 
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.repository.UserRepository;
+import helpdesk.api.user.entity.UserRole;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;

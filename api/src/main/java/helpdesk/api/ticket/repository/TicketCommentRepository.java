@@ -1,5 +1,6 @@
-package helpdesk.api.ticket;
+package helpdesk.api.ticket.repository;
 
+import helpdesk.api.ticket.entity.TicketComment;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 

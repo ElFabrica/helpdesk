@@ -1,4 +1,4 @@
-package helpdesk.api.ticket;
+package helpdesk.api.ticket.dto;
 
 import jakarta.validation.constraints.NotBlank;
 

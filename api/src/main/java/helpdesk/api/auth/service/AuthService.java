@@ -1,8 +1,12 @@
-package helpdesk.api.auth;
+package helpdesk.api.auth.service;
 
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.auth.dto.LoginRequestDTO;
+import helpdesk.api.auth.dto.RegisterRequestDTO;
+import helpdesk.api.auth.dto.TokenResponseDTO;
+import helpdesk.api.auth.dto.UserResponseDTO;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.entity.UserRole;
+import helpdesk.api.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

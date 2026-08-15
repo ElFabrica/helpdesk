@@ -1,4 +1,4 @@
-package helpdesk.api.ticket;
+package helpdesk.api.ticket.entity;
 
 public enum TicketStatus {
     ABERTO,

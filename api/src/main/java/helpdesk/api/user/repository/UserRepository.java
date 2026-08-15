@@ -1,5 +1,6 @@
-package helpdesk.api.user;
+package helpdesk.api.user.repository;
 
+import helpdesk.api.user.entity.User;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

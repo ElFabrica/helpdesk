@@ -1,5 +1,8 @@
-package helpdesk.api.ticket;
+package helpdesk.api.ticket.service;
 
+import helpdesk.api.ticket.entity.ClassificationOrigin;
+import helpdesk.api.ticket.entity.TicketCategory;
+import helpdesk.api.ticket.entity.TicketPriority;
 import java.text.Normalizer;
 import java.util.Locale;
 import org.springframework.stereotype.Component;

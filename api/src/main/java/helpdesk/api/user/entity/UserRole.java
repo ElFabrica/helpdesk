@@ -1,4 +1,4 @@
-package helpdesk.api.user;
+package helpdesk.api.user.entity;
 
 public enum UserRole {
     ADMIN,

@@ -2,15 +2,27 @@ package helpdesk.api.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import helpdesk.api.auth.JwtTokenService;
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.auth.service.JwtTokenService;
+import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
+import helpdesk.api.ticket.dto.TicketResponseDTO;
+import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
+import helpdesk.api.ticket.entity.ClassificationOrigin;
+import helpdesk.api.ticket.entity.Ticket;
+import helpdesk.api.ticket.entity.TicketCategory;
+import helpdesk.api.ticket.entity.TicketPriority;
+import helpdesk.api.ticket.entity.TicketStatus;
+import helpdesk.api.ticket.repository.TicketRepository;
+import helpdesk.api.ticket.service.TicketService;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.entity.UserRole;
+import helpdesk.api.user.repository.UserRepository;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -66,8 +78,89 @@ class TicketServiceTests {
         assertThat(savedTicket.getResponsible()).isNull();
     }
 
+    @Test
+    void adminListsAllTicketsWithCombinedFiltersByNewestFirst() {
+        User admin = saveUser("Ana Admin", "ana-ticket-list-service@example.com", UserRole.ADMIN);
+        User maria = saveUser("Maria Solicitante", "maria-ticket-list-service@example.com", UserRole.SOLICITANTE);
+        User joao = saveUser("Joao Solicitante", "joao-ticket-list-service@example.com", UserRole.SOLICITANTE);
+        Ticket olderMatchingTicket = saveTicket(
+                "Sistema lento",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                maria
+        );
+        saveTicket("Troca de monitor", TicketCategory.HARDWARE, TicketPriority.ALTA, maria);
+        Ticket newerMatchingTicket = saveTicket(
+                "Aplicacao indisponivel",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                joao
+        );
+        authenticateAs(admin);
+
+        List<TicketSummaryResponseDTO> tickets = ticketService.list(
+                TicketStatus.ABERTO,
+                TicketPriority.ALTA,
+                TicketCategory.SOFTWARE
+        );
+
+        assertThat(tickets)
+                .extracting(TicketSummaryResponseDTO::id)
+                .containsExactly(newerMatchingTicket.getId(), olderMatchingTicket.getId());
+    }
+
+    @Test
+    void requesterListsOnlyOwnTickets() {
+        User maria = saveUser("Maria Solicitante", "maria-own-ticket-list-service@example.com", UserRole.SOLICITANTE);
+        User joao = saveUser("Joao Solicitante", "joao-own-ticket-list-service@example.com", UserRole.SOLICITANTE);
+        Ticket ownTicket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, maria);
+        saveTicket("Acesso ao VPN", TicketCategory.ACESSO, TicketPriority.MEDIA, joao);
+        authenticateAs(maria);
+
+        List<TicketSummaryResponseDTO> tickets = ticketService.list(null, null, null);
+
+        assertThat(tickets)
+                .extracting(TicketSummaryResponseDTO::id)
+                .containsExactly(ownTicket.getId());
+    }
+
+    @Test
+    void returnsEmptyListWhenNoTicketMatchesFilters() {
+        User requester = saveUser("Maria Solicitante", "maria-empty-ticket-list-service@example.com", UserRole.SOLICITANTE);
+        saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(requester);
+
+        List<TicketSummaryResponseDTO> tickets = ticketService.list(null, TicketPriority.BAIXA, null);
+
+        assertThat(tickets).isEmpty();
+    }
+
     private void authenticateAs(User user) {
         Jwt jwt = jwtDecoder.decode(jwtTokenService.generateToken(user));
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+                jwt,
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
+        ));
+    }
+
+    private User saveUser(String name, String email, UserRole role) {
+        return userRepository.save(new User(name, email, "hash", role));
+    }
+
+    private Ticket saveTicket(
+            String title,
+            TicketCategory category,
+            TicketPriority priority,
+            User requester
+    ) {
+        return ticketRepository.saveAndFlush(new Ticket(
+                title,
+                "Descricao do chamado",
+                category,
+                priority,
+                ClassificationOrigin.MANUAL,
+                requester,
+                null
+        ));
     }
 }

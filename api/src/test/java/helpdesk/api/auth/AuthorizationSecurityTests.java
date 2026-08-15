@@ -5,9 +5,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import helpdesk.api.ApiApplication;
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.auth.service.AuthenticatedUserService;
+import helpdesk.api.auth.service.JwtTokenService;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.entity.UserRole;
+import helpdesk.api.user.repository.UserRepository;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

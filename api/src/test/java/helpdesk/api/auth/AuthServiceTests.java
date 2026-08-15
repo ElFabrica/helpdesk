@@ -3,9 +3,14 @@ package helpdesk.api.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.auth.dto.LoginRequestDTO;
+import helpdesk.api.auth.dto.RegisterRequestDTO;
+import helpdesk.api.auth.dto.TokenResponseDTO;
+import helpdesk.api.auth.dto.UserResponseDTO;
+import helpdesk.api.auth.service.AuthService;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.entity.UserRole;
+import helpdesk.api.user.repository.UserRepository;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

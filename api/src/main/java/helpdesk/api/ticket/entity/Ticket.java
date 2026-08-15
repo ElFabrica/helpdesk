@@ -1,6 +1,6 @@
-package helpdesk.api.ticket;
+package helpdesk.api.ticket.entity;
 
-import helpdesk.api.user.User;
+import helpdesk.api.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

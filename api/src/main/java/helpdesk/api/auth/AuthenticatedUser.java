@@ -1,6 +1,6 @@
 package helpdesk.api.auth;
 
-import helpdesk.api.user.UserRole;
+import helpdesk.api.user.entity.UserRole;
 
 public record AuthenticatedUser(Long id, String email, UserRole role) {
 

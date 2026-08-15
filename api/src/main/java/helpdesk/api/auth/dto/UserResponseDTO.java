@@ -1,7 +1,7 @@
-package helpdesk.api.auth;
+package helpdesk.api.auth.dto;
 
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.entity.UserRole;
 import java.time.Instant;
 
 public record UserResponseDTO(

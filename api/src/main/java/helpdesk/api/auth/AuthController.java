@@ -1,5 +1,10 @@
 package helpdesk.api.auth;
 
+import helpdesk.api.auth.dto.LoginRequestDTO;
+import helpdesk.api.auth.dto.RegisterRequestDTO;
+import helpdesk.api.auth.dto.TokenResponseDTO;
+import helpdesk.api.auth.dto.UserResponseDTO;
+import helpdesk.api.auth.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;

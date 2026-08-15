@@ -2,9 +2,9 @@ package helpdesk.api.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import helpdesk.api.user.User;
-import helpdesk.api.user.UserRepository;
-import helpdesk.api.user.UserRole;
+import helpdesk.api.user.entity.User;
+import helpdesk.api.user.repository.UserRepository;
+import helpdesk.api.user.entity.UserRole;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
