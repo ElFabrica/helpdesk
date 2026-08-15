@@ -10,9 +10,11 @@ import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
 import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.ClassificationOrigin;
 import helpdesk.api.ticket.entity.Ticket;
+import helpdesk.api.ticket.entity.TicketComment;
 import helpdesk.api.ticket.entity.TicketCategory;
 import helpdesk.api.ticket.entity.TicketPriority;
 import helpdesk.api.ticket.entity.TicketStatus;
+import helpdesk.api.ticket.repository.TicketCommentRepository;
 import helpdesk.api.ticket.repository.TicketRepository;
 import helpdesk.api.ticket.service.TicketService;
 import helpdesk.api.user.entity.User;
@@ -22,6 +24,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
@@ -42,6 +46,9 @@ class TicketServiceTests {
 
     @Autowired
     private TicketRepository ticketRepository;
+
+    @Autowired
+    private TicketCommentRepository ticketCommentRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -209,6 +216,110 @@ class TicketServiceTests {
     }
 
     @Test
+    void statusChangeCreatesHistoryEvent() {
+        User requester = saveUser("Maria Solicitante", "maria-status-history-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(requester);
+
+        ticketService.update(ticket.getId(), new UpdateTicketRequestDTO(
+                null,
+                null,
+                TicketStatus.EM_ANDAMENTO,
+                null,
+                null,
+                null
+        ));
+
+        List<TicketComment> comments = ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId());
+        assertThat(comments)
+                .hasSize(1)
+                .first()
+                .satisfies(comment -> {
+                    assertThat(comment.getAuthor().getId()).isEqualTo(requester.getId());
+                    assertThat(comment.getText()).isEqualTo("Status alterado de ABERTO para EM_ANDAMENTO");
+                });
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "ABERTO, EM_ANDAMENTO",
+            "ABERTO, RESOLVIDO",
+            "ABERTO, FECHADO",
+            "EM_ANDAMENTO, RESOLVIDO",
+            "EM_ANDAMENTO, FECHADO",
+            "RESOLVIDO, FECHADO"
+    })
+    void acceptsAllowedStatusTransitions(TicketStatus currentStatus, TicketStatus newStatus) {
+        User requester = saveUser(
+                "Maria Solicitante",
+                "maria-allowed-transition-" + currentStatus + "-" + newStatus + "@example.com",
+                UserRole.SOLICITANTE
+        );
+        Ticket ticket = saveTicketWithStatus(
+                "Sistema lento",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                requester,
+                currentStatus
+        );
+        authenticateAs(requester);
+
+        TicketResponseDTO response = ticketService.update(ticket.getId(), new UpdateTicketRequestDTO(
+                null,
+                null,
+                newStatus,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(response.status()).isEqualTo(newStatus);
+        assertThat(ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId()))
+                .extracting(TicketComment::getText)
+                .containsExactly("Status alterado de " + currentStatus + " para " + newStatus);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "EM_ANDAMENTO, ABERTO",
+            "RESOLVIDO, ABERTO",
+            "RESOLVIDO, EM_ANDAMENTO",
+            "FECHADO, ABERTO",
+            "FECHADO, EM_ANDAMENTO",
+            "FECHADO, RESOLVIDO"
+    })
+    void rejectsForbiddenStatusTransitions(TicketStatus currentStatus, TicketStatus newStatus) {
+        User requester = saveUser(
+                "Maria Solicitante",
+                "maria-forbidden-transition-" + currentStatus + "-" + newStatus + "@example.com",
+                UserRole.SOLICITANTE
+        );
+        Ticket ticket = saveTicketWithStatus(
+                "Sistema lento",
+                TicketCategory.SOFTWARE,
+                TicketPriority.ALTA,
+                requester,
+                currentStatus
+        );
+        authenticateAs(requester);
+
+        assertThatThrownBy(() -> ticketService.update(ticket.getId(), new UpdateTicketRequestDTO(
+                null,
+                null,
+                newStatus,
+                null,
+                null,
+                null
+        )))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        Ticket unchangedTicket = ticketRepository.findById(ticket.getId()).orElseThrow();
+        assertThat(unchangedTicket.getStatus()).isEqualTo(currentStatus);
+        assertThat(ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId())).isEmpty();
+    }
+
+    @Test
     void requesterCannotUpdateAdminTicketFields() {
         User requester = saveUser("Maria Solicitante", "maria-forbidden-update-service@example.com", UserRole.SOLICITANTE);
         Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
@@ -239,6 +350,9 @@ class TicketServiceTests {
         Ticket cancelledTicket = ticketRepository.findById(ticket.getId()).orElseThrow();
         assertThat(cancelledTicket.getStatus()).isEqualTo(TicketStatus.FECHADO);
         assertThat(cancelledTicket.getUpdatedAt()).isAfter(previousUpdatedAt);
+        assertThat(ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId()))
+                .extracting(TicketComment::getText)
+                .containsExactly("Status alterado de ABERTO para FECHADO");
     }
 
     private void authenticateAs(User user) {
@@ -268,5 +382,17 @@ class TicketServiceTests {
                 requester,
                 null
         ));
+    }
+
+    private Ticket saveTicketWithStatus(
+            String title,
+            TicketCategory category,
+            TicketPriority priority,
+            User requester,
+            TicketStatus status
+    ) {
+        Ticket ticket = saveTicket(title, category, priority, requester);
+        ticket.setStatus(status);
+        return ticketRepository.saveAndFlush(ticket);
     }
 }

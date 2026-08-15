@@ -8,8 +8,10 @@ import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
 import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.Ticket;
 import helpdesk.api.ticket.entity.TicketCategory;
+import helpdesk.api.ticket.entity.TicketComment;
 import helpdesk.api.ticket.entity.TicketPriority;
 import helpdesk.api.ticket.entity.TicketStatus;
+import helpdesk.api.ticket.repository.TicketCommentRepository;
 import helpdesk.api.ticket.repository.TicketRepository;
 import helpdesk.api.user.entity.User;
 import helpdesk.api.user.repository.UserRepository;
@@ -29,19 +31,22 @@ public class TicketService {
     private final TicketAuthorizationService ticketAuthorizationService;
     private final UserRepository userRepository;
     private final TicketClassifier ticketClassifier;
+    private final TicketCommentRepository ticketCommentRepository;
 
     public TicketService(
             TicketRepository ticketRepository,
             AuthenticatedUserService authenticatedUserService,
             TicketAuthorizationService ticketAuthorizationService,
             UserRepository userRepository,
-            TicketClassifier ticketClassifier
+            TicketClassifier ticketClassifier,
+            TicketCommentRepository ticketCommentRepository
     ) {
         this.ticketRepository = ticketRepository;
         this.authenticatedUserService = authenticatedUserService;
         this.ticketAuthorizationService = ticketAuthorizationService;
         this.userRepository = userRepository;
         this.ticketClassifier = ticketClassifier;
+        this.ticketCommentRepository = ticketCommentRepository;
     }
 
     @Transactional
@@ -114,7 +119,7 @@ public class TicketService {
         Ticket ticket = findTicket(id);
         ticketAuthorizationService.assertCanCancel(ticket);
 
-        ticket.setStatus(TicketStatus.FECHADO);
+        changeStatus(ticket, TicketStatus.FECHADO);
         ticketRepository.saveAndFlush(ticket);
     }
 
@@ -133,7 +138,7 @@ public class TicketService {
         }
 
         if (request.status() != null) {
-            ticket.setStatus(request.status());
+            changeStatus(ticket, request.status());
         }
     }
 
@@ -162,6 +167,36 @@ public class TicketService {
         }
 
         return value;
+    }
+
+    private void changeStatus(Ticket ticket, TicketStatus newStatus) {
+        TicketStatus currentStatus = ticket.getStatus();
+        if (currentStatus == newStatus) {
+            return;
+        }
+
+        if (!isAllowedStatusTransition(currentStatus, newStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transicao de status invalida");
+        }
+
+        ticket.setStatus(newStatus);
+        ticketCommentRepository.save(new TicketComment(
+                ticket,
+                authenticatedUserService.getAuthenticatedUserEntity(),
+                "Status alterado de " + currentStatus + " para " + newStatus
+        ));
+    }
+
+    private boolean isAllowedStatusTransition(TicketStatus currentStatus, TicketStatus newStatus) {
+        return switch (currentStatus) {
+            case ABERTO -> newStatus == TicketStatus.EM_ANDAMENTO
+                    || newStatus == TicketStatus.RESOLVIDO
+                    || newStatus == TicketStatus.FECHADO;
+            case EM_ANDAMENTO -> newStatus == TicketStatus.RESOLVIDO
+                    || newStatus == TicketStatus.FECHADO;
+            case RESOLVIDO -> newStatus == TicketStatus.FECHADO;
+            case FECHADO -> false;
+        };
     }
 
     private Specification<Ticket> requesterScope(AuthenticatedUser authenticatedUser) {
