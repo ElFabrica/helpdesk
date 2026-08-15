@@ -1,5 +1,8 @@
-import { FormEvent, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { z } from "zod";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,14 +22,25 @@ type LocationState = {
   };
 };
 
+const loginSchema = z.object({
+  email: z.string().trim().email("Informe um e-mail valido."),
+  password: z.string().min(1, "Informe a senha."),
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
+
 export function LoginPage() {
   const { isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const form = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
   const state = location.state as LocationState | null;
   const redirectTo = state?.from?.pathname ?? "/";
@@ -35,18 +49,14 @@ export function LoginPage() {
     return <Navigate to="/" replace />;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(values: LoginForm) {
     setError("");
-    setIsSubmitting(true);
 
     try {
-      await login({ email, password });
+      await login(values);
       navigate(redirectTo, { replace: true });
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Nao foi possivel entrar.");
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -57,7 +67,7 @@ export function LoginPage() {
         <CardDescription>Acesse a central de chamados com seu e-mail e senha.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
           {error ? (
             <Alert className="border-destructive/40 bg-destructive/10 text-destructive">
               {error}
@@ -70,10 +80,9 @@ export function LoginPage() {
               id="email"
               type="email"
               autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
+              {...form.register("email")}
             />
+            <FieldError message={form.formState.errors.email?.message} />
           </div>
 
           <div className="space-y-2">
@@ -82,14 +91,13 @@ export function LoginPage() {
               id="password"
               type="password"
               autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
+              {...form.register("password")}
             />
+            <FieldError message={form.formState.errors.password?.message} />
           </div>
 
-          <Button className="w-full" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Entrando..." : "Entrar"}
+          <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Entrando..." : "Entrar"}
           </Button>
         </form>
 
@@ -102,4 +110,12 @@ export function LoginPage() {
       </CardContent>
     </Card>
   );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="text-sm text-destructive">{message}</p>;
 }

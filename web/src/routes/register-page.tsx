@@ -1,5 +1,8 @@
-import { FormEvent, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Link, Navigate } from "react-router-dom";
+import { z } from "zod";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,29 +16,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/features/auth/auth-context";
 
+const registerSchema = z.object({
+  name: z.string().trim().min(1, "Informe o nome."),
+  email: z.string().trim().email("Informe um e-mail valido."),
+  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+});
+
+type RegisterForm = z.infer<typeof registerSchema>;
+
 export function RegisterPage() {
   const { isAuthenticated, register } = useAuth();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const form = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(values: RegisterForm) {
     setError("");
-    setIsSubmitting(true);
 
     try {
-      await register({ name, email, password });
+      await register(values);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Nao foi possivel criar a conta.");
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -46,7 +57,7 @@ export function RegisterPage() {
         <CardDescription>Cadastre-se como solicitante para abrir e acompanhar chamados.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
           {error ? (
             <Alert className="border-destructive/40 bg-destructive/10 text-destructive">
               {error}
@@ -58,10 +69,9 @@ export function RegisterPage() {
             <Input
               id="name"
               autoComplete="name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
+              {...form.register("name")}
             />
+            <FieldError message={form.formState.errors.name?.message} />
           </div>
 
           <div className="space-y-2">
@@ -70,10 +80,9 @@ export function RegisterPage() {
               id="register-email"
               type="email"
               autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
+              {...form.register("email")}
             />
+            <FieldError message={form.formState.errors.email?.message} />
           </div>
 
           <div className="space-y-2">
@@ -83,14 +92,13 @@ export function RegisterPage() {
               type="password"
               autoComplete="new-password"
               minLength={6}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
+              {...form.register("password")}
             />
+            <FieldError message={form.formState.errors.password?.message} />
           </div>
 
-          <Button className="w-full" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Criando..." : "Criar cadastro"}
+          <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Criando..." : "Criar cadastro"}
           </Button>
         </form>
 
@@ -103,4 +111,12 @@ export function RegisterPage() {
       </CardContent>
     </Card>
   );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="text-sm text-destructive">{message}</p>;
 }

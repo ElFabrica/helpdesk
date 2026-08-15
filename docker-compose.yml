@@ -1,4 +1,43 @@
 services:
+  api:
+    build:
+      context: ./api
+      target: dev
+    container_name: helpdesk-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-helpdesk}
+      POSTGRES_USER: ${POSTGRES_USER:-helpdesk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-helpdesk}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-dev-secret-change-me}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      GROQ_CLASSIFIER_ENABLED: ${GROQ_CLASSIFIER_ENABLED:-false}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - ./api/src:/app/src
+      - ./api/pom.xml:/app/pom.xml
+      - maven-repository:/root/.m2
+
+  web:
+    build:
+      context: ./web
+      target: dev
+    container_name: helpdesk-web
+    depends_on:
+      - api
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      VITE_PROXY_TARGET: http://api:8080
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./web:/app
+      - web-node-modules:/app/node_modules
+
   postgres:
     image: postgres:16-alpine
     container_name: helpdesk-postgres
@@ -17,4 +56,6 @@ services:
       retries: 5
 
 volumes:
+  maven-repository:
   postgres-data:
+  web-node-modules:

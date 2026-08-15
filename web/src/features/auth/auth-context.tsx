@@ -30,9 +30,17 @@ type TokenResponseDTO = {
   type: string;
 };
 
+type AuthenticatedUser = {
+  id: number;
+  email: string;
+  role: "ADMIN" | "SOLICITANTE";
+};
+
 type AuthContextValue = {
   token: string | null;
+  user: AuthenticatedUser | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
@@ -42,6 +50,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setToken] = useState(() => getStoredToken());
+  const user = useMemo(() => decodeToken(token), [token]);
 
   const login = useCallback(async (payload: LoginPayload) => {
     try {
@@ -70,12 +79,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo(
     () => ({
       token,
+      user,
       isAuthenticated: Boolean(token),
+      isAdmin: user?.role === "ADMIN",
       login,
       register,
       logout,
     }),
-    [login, logout, register, token]
+    [login, logout, register, token, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -88,4 +99,39 @@ export function useAuth() {
   }
 
   return context;
+}
+
+function decodeToken(token: string | null): AuthenticatedUser | null {
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const [, payload] = token.split(".");
+    const normalizedPayload = payload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const decodedPayload = JSON.parse(window.atob(normalizedPayload)) as {
+      sub?: unknown;
+      userId?: unknown;
+      role?: unknown;
+    };
+
+    if (
+      typeof decodedPayload.userId !== "number" ||
+      typeof decodedPayload.sub !== "string" ||
+      (decodedPayload.role !== "ADMIN" && decodedPayload.role !== "SOLICITANTE")
+    ) {
+      return null;
+    }
+
+    return {
+      id: decodedPayload.userId,
+      email: decodedPayload.sub,
+      role: decodedPayload.role,
+    };
+  } catch {
+    return null;
+  }
 }
