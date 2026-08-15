@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const TOKEN_STORAGE_KEY = "helpdesk.auth.token";
 
 export const api = axios.create({
@@ -29,6 +29,13 @@ export function storeToken(token: string) {
 
 export function clearStoredToken() {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getApiUrl(path: string) {
+  const normalizedBaseUrl = API_BASE_URL.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${normalizedBaseUrl}${normalizedPath}`;
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string) {

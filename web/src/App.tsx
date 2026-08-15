@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/routes/app-layout";
 import { AuthLayout } from "@/routes/auth-layout";
+import { DashboardPage } from "@/routes/dashboard-page";
 import { HomePage } from "@/routes/home-page";
 import { LoginPage } from "@/routes/login-page";
 import { ProtectedRoute } from "@/routes/protected-route";
@@ -18,6 +19,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/tickets/:ticketId" element={<TicketDetailPage />} />
         </Route>
       </Route>
