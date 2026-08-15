@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -29,6 +30,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
+@EnableMethodSecurity
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
@@ -81,7 +83,14 @@ public class SecurityConfig {
     }
 
     private Converter<Jwt, Collection<GrantedAuthority>> roleAuthorityConverter() {
-        return jwt -> List.of(new SimpleGrantedAuthority("ROLE_" + jwt.getClaimAsString("role")));
+        return jwt -> {
+            String role = jwt.getClaimAsString("role");
+            if (role == null || role.isBlank()) {
+                return List.of();
+            }
+
+            return List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        };
     }
 
     private SecretKey jwtSecretKey(JwtProperties jwtProperties) {
