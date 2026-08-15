@@ -52,7 +52,7 @@ public class TicketService {
     @Transactional
     public TicketResponseDTO create(CreateTicketRequestDTO request) {
         User requester = authenticatedUserService.getAuthenticatedUserEntity();
-        TicketClassification classification = ticketClassifier.classify(request.title(), request.description());
+        ClassificationResult classification = ticketClassifier.classify(request.title(), request.description());
 
         Ticket ticket = new Ticket(
                 request.title(),

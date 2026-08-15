@@ -8,13 +8,13 @@ import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 @Component
-public class TemporaryTicketClassifier implements TicketClassifier {
+public class HeuristicTicketClassifier implements TicketClassifier {
 
     @Override
-    public TicketClassification classify(String title, String description) {
-        String text = normalize(title + " " + description);
+    public ClassificationResult classify(String title, String description) {
+        String text = normalize(title) + " " + normalize(description);
 
-        return new TicketClassification(
+        return new ClassificationResult(
                 categoryFor(text),
                 priorityFor(text),
                 ClassificationOrigin.IA
@@ -60,6 +60,10 @@ public class TemporaryTicketClassifier implements TicketClassifier {
     }
 
     private String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+
         String lowerCase = value.toLowerCase(Locale.ROOT);
         return Normalizer.normalize(lowerCase, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "");
