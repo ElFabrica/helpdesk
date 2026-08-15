@@ -21,6 +21,7 @@ import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -35,24 +36,29 @@ public class Ticket {
     private Long id;
 
     @NotBlank
+    @Setter
     @Column(nullable = false)
     private String title;
 
     @NotBlank
+    @Setter
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
     @NotNull
+    @Setter
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TicketCategory category;
 
     @NotNull
+    @Setter
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TicketPriority priority;
 
     @NotNull
+    @Setter
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TicketStatus status = TicketStatus.ABERTO;
@@ -67,6 +73,7 @@ public class Ticket {
     @JoinColumn(name = "requester_id", nullable = false)
     private User requester;
 
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "responsible_id")
     private User responsible;

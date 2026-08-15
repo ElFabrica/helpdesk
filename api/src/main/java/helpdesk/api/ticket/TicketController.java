@@ -3,6 +3,7 @@ package helpdesk.api.ticket;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
+import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.TicketCategory;
 import helpdesk.api.ticket.entity.TicketPriority;
 import helpdesk.api.ticket.entity.TicketStatus;
@@ -10,7 +11,10 @@ import helpdesk.api.ticket.service.TicketService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,5 +45,24 @@ public class TicketController {
             @RequestParam(required = false) TicketCategory category
     ) {
         return ticketService.list(status, priority, category);
+    }
+
+    @GetMapping("/{id}")
+    public TicketResponseDTO detail(@PathVariable Long id) {
+        return ticketService.detail(id);
+    }
+
+    @PatchMapping("/{id}")
+    public TicketResponseDTO update(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTicketRequestDTO request
+    ) {
+        return ticketService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancel(@PathVariable Long id) {
+        ticketService.cancel(id);
     }
 }

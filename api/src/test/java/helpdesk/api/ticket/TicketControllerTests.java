@@ -1,6 +1,9 @@
 package helpdesk.api.ticket;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -148,6 +151,94 @@ class TicketControllerTests {
                         .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester))
                         .param("status", "INVALIDO"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTicketDetailReturnsOwnTicket() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-detail-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ticket.getId()))
+                .andExpect(jsonPath("$.title").value("Sistema lento"))
+                .andExpect(jsonPath("$.description").value("Descricao do chamado"))
+                .andExpect(jsonPath("$.requesterId").value(requester.getId()));
+    }
+
+    @Test
+    void getTicketDetailReturnsNotFoundWhenTicketDoesNotExist() throws Exception {
+        User requester = saveRequester();
+
+        mockMvc.perform(get("/api/tickets/{id}", 999_999L)
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getTicketDetailForAnotherRequesterReturnsForbidden() throws Exception {
+        User maria = saveUser("Maria Solicitante", "maria-forbidden-detail-controller@example.com", UserRole.SOLICITANTE);
+        User joao = saveUser("Joao Solicitante", "joao-forbidden-detail-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, joao);
+
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(maria)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminUpdatesTicketFields() throws Exception {
+        User admin = saveUser("Ana Admin", "ana-update-controller@example.com", UserRole.ADMIN);
+        User requester = saveUser("Maria Solicitante", "maria-update-controller@example.com", UserRole.SOLICITANTE);
+        User responsible = saveUser("Bruno Admin", "bruno-update-controller@example.com", UserRole.ADMIN);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(patch("/api/tickets/{id}", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "EM_ANDAMENTO",
+                                  "priority": "MEDIA",
+                                  "category": "REDE",
+                                  "responsibleId": %d
+                                }
+                                """.formatted(responsible.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(TicketStatus.EM_ANDAMENTO.name()))
+                .andExpect(jsonPath("$.priority").value(TicketPriority.MEDIA.name()))
+                .andExpect(jsonPath("$.category").value(TicketCategory.REDE.name()))
+                .andExpect(jsonPath("$.responsibleId").value(responsible.getId()));
+    }
+
+    @Test
+    void requesterCannotUpdateAdminFields() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-forbidden-update-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(patch("/api/tickets/{id}", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "priority": "BAIXA"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void requesterCancelsOwnTicket() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-cancel-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(delete("/api/tickets/{id}", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
+                .andExpect(status().isNoContent());
+
+        Ticket cancelledTicket = ticketRepository.findById(ticket.getId()).orElseThrow();
+        assertThat(cancelledTicket.getStatus()).isEqualTo(TicketStatus.FECHADO);
     }
 
     private User saveRequester() {

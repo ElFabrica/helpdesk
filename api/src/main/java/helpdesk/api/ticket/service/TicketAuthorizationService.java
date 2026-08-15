@@ -42,6 +42,18 @@ public class TicketAuthorizationService {
         }
     }
 
+    public void assertCanUpdate(Ticket ticket) {
+        assertCanAccess(ticket);
+    }
+
+    public void assertCanUpdateAdminFields() {
+        assertAdmin();
+    }
+
+    public void assertCanCancel(Ticket ticket) {
+        assertCanAccess(ticket);
+    }
+
     public void assertCanReassignResponsible() {
         assertAdmin();
     }

@@ -1,11 +1,13 @@
 package helpdesk.api.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import helpdesk.api.auth.service.JwtTokenService;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
+import helpdesk.api.ticket.dto.UpdateTicketRequestDTO;
 import helpdesk.api.ticket.entity.ClassificationOrigin;
 import helpdesk.api.ticket.entity.Ticket;
 import helpdesk.api.ticket.entity.TicketCategory;
@@ -16,17 +18,20 @@ import helpdesk.api.ticket.service.TicketService;
 import helpdesk.api.user.entity.User;
 import helpdesk.api.user.entity.UserRole;
 import helpdesk.api.user.repository.UserRepository;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootTest
 @Transactional
@@ -133,6 +138,107 @@ class TicketServiceTests {
         List<TicketSummaryResponseDTO> tickets = ticketService.list(null, TicketPriority.BAIXA, null);
 
         assertThat(tickets).isEmpty();
+    }
+
+    @Test
+    void requesterGetsOwnTicketDetail() {
+        User requester = saveUser("Maria Solicitante", "maria-detail-ticket-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(requester);
+
+        TicketResponseDTO response = ticketService.detail(ticket.getId());
+
+        assertThat(response.id()).isEqualTo(ticket.getId());
+        assertThat(response.description()).isEqualTo("Descricao do chamado");
+        assertThat(response.requesterId()).isEqualTo(requester.getId());
+    }
+
+    @Test
+    void requesterCannotGetAnotherRequesterTicketDetail() {
+        User maria = saveUser("Maria Solicitante", "maria-forbidden-detail-service@example.com", UserRole.SOLICITANTE);
+        User joao = saveUser("Joao Solicitante", "joao-forbidden-detail-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, joao);
+        authenticateAs(maria);
+
+        assertThatThrownBy(() -> ticketService.detail(ticket.getId()))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void adminUpdatesTicketClassificationAndResponsible() {
+        User admin = saveUser("Ana Admin", "ana-update-ticket-service@example.com", UserRole.ADMIN);
+        User requester = saveUser("Maria Solicitante", "maria-admin-update-ticket-service@example.com", UserRole.SOLICITANTE);
+        User responsible = saveUser("Bruno Admin", "bruno-admin-update-ticket-service@example.com", UserRole.ADMIN);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(admin);
+
+        TicketResponseDTO response = ticketService.update(ticket.getId(), new UpdateTicketRequestDTO(
+                null,
+                null,
+                TicketStatus.EM_ANDAMENTO,
+                TicketPriority.MEDIA,
+                TicketCategory.REDE,
+                responsible.getId()
+        ));
+
+        assertThat(response.status()).isEqualTo(TicketStatus.EM_ANDAMENTO);
+        assertThat(response.priority()).isEqualTo(TicketPriority.MEDIA);
+        assertThat(response.category()).isEqualTo(TicketCategory.REDE);
+        assertThat(response.responsibleId()).isEqualTo(responsible.getId());
+    }
+
+    @Test
+    void requesterUpdatesOwnTicketTextAndStatus() {
+        User requester = saveUser("Maria Solicitante", "maria-update-own-ticket-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(requester);
+
+        TicketResponseDTO response = ticketService.update(ticket.getId(), new UpdateTicketRequestDTO(
+                "Sistema indisponivel",
+                "Nao consigo acessar o sistema desde cedo.",
+                TicketStatus.RESOLVIDO,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(response.title()).isEqualTo("Sistema indisponivel");
+        assertThat(response.description()).isEqualTo("Nao consigo acessar o sistema desde cedo.");
+        assertThat(response.status()).isEqualTo(TicketStatus.RESOLVIDO);
+    }
+
+    @Test
+    void requesterCannotUpdateAdminTicketFields() {
+        User requester = saveUser("Maria Solicitante", "maria-forbidden-update-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        authenticateAs(requester);
+
+        assertThatThrownBy(() -> ticketService.update(ticket.getId(), new UpdateTicketRequestDTO(
+                null,
+                null,
+                null,
+                TicketPriority.BAIXA,
+                null,
+                null
+        )))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void cancelClosesTicketAndUpdatesTimestamp() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-cancel-ticket-service@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+        Instant previousUpdatedAt = ticket.getUpdatedAt();
+        authenticateAs(requester);
+
+        Thread.sleep(10);
+        ticketService.cancel(ticket.getId());
+
+        Ticket cancelledTicket = ticketRepository.findById(ticket.getId()).orElseThrow();
+        assertThat(cancelledTicket.getStatus()).isEqualTo(TicketStatus.FECHADO);
+        assertThat(cancelledTicket.getUpdatedAt()).isAfter(previousUpdatedAt);
     }
 
     private void authenticateAs(User user) {
