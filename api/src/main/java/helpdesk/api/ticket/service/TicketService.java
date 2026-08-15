@@ -2,6 +2,8 @@ package helpdesk.api.ticket.service;
 
 import helpdesk.api.auth.AuthenticatedUser;
 import helpdesk.api.auth.service.AuthenticatedUserService;
+import helpdesk.api.dashboard.event.DashboardTicketCreatedEvent;
+import helpdesk.api.dashboard.event.DashboardTicketUpdatedEvent;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
@@ -17,6 +19,7 @@ import helpdesk.api.ticket.repository.TicketRepository;
 import helpdesk.api.user.entity.User;
 import helpdesk.api.user.repository.UserRepository;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -33,6 +36,7 @@ public class TicketService {
     private final UserRepository userRepository;
     private final TicketClassifier ticketClassifier;
     private final TicketCommentRepository ticketCommentRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TicketService(
             TicketRepository ticketRepository,
@@ -40,7 +44,8 @@ public class TicketService {
             TicketAuthorizationService ticketAuthorizationService,
             UserRepository userRepository,
             TicketClassifier ticketClassifier,
-            TicketCommentRepository ticketCommentRepository
+            TicketCommentRepository ticketCommentRepository,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.ticketRepository = ticketRepository;
         this.authenticatedUserService = authenticatedUserService;
@@ -48,6 +53,7 @@ public class TicketService {
         this.userRepository = userRepository;
         this.ticketClassifier = ticketClassifier;
         this.ticketCommentRepository = ticketCommentRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -65,7 +71,10 @@ public class TicketService {
                 null
         );
 
-        return TicketResponseDTO.from(ticketRepository.saveAndFlush(ticket));
+        Ticket savedTicket = ticketRepository.saveAndFlush(ticket);
+        publishTicketCreated(savedTicket);
+
+        return TicketResponseDTO.from(savedTicket);
     }
 
     @Transactional(readOnly = true)
@@ -112,7 +121,10 @@ public class TicketService {
             applyAdminUpdates(ticket, request);
         }
 
-        return TicketResponseDTO.from(ticketRepository.saveAndFlush(ticket));
+        Ticket savedTicket = ticketRepository.saveAndFlush(ticket);
+        publishTicketUpdated(savedTicket);
+
+        return TicketResponseDTO.from(savedTicket);
     }
 
     @Transactional
@@ -122,7 +134,10 @@ public class TicketService {
 
         applyClassificationUpdate(ticket, request.category(), request.priority());
 
-        return TicketResponseDTO.from(ticketRepository.saveAndFlush(ticket));
+        Ticket savedTicket = ticketRepository.saveAndFlush(ticket);
+        publishTicketUpdated(savedTicket);
+
+        return TicketResponseDTO.from(savedTicket);
     }
 
     @Transactional
@@ -131,7 +146,7 @@ public class TicketService {
         ticketAuthorizationService.assertCanCancel(ticket);
 
         changeStatus(ticket, TicketStatus.FECHADO);
-        ticketRepository.saveAndFlush(ticket);
+        publishTicketUpdated(ticketRepository.saveAndFlush(ticket));
     }
 
     private Ticket findTicket(Long id) {
@@ -230,6 +245,14 @@ public class TicketService {
             case RESOLVIDO -> newStatus == TicketStatus.FECHADO;
             case FECHADO -> false;
         };
+    }
+
+    private void publishTicketCreated(Ticket ticket) {
+        eventPublisher.publishEvent(new DashboardTicketCreatedEvent(TicketSummaryResponseDTO.from(ticket)));
+    }
+
+    private void publishTicketUpdated(Ticket ticket) {
+        eventPublisher.publishEvent(new DashboardTicketUpdatedEvent(TicketSummaryResponseDTO.from(ticket)));
     }
 
     private Specification<Ticket> requesterScope(AuthenticatedUser authenticatedUser) {

@@ -1,6 +1,7 @@
 package helpdesk.api.dashboard;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,12 +46,37 @@ class DashboardControllerTests {
     }
 
     @Test
+    void eventsRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/dashboard/events"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void requesterCannotAccessGlobalIndicators() throws Exception {
         User requester = saveUser("Maria Solicitante", "maria-dashboard-forbidden@example.com", UserRole.SOLICITANTE);
 
         mockMvc.perform(get("/api/dashboard/indicators")
                         .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void requesterCannotAccessDashboardEvents() throws Exception {
+        User requester = saveUser("Joao Solicitante", "joao-dashboard-events-forbidden@example.com", UserRole.SOLICITANTE);
+
+        mockMvc.perform(get("/api/dashboard/events")
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanConnectToDashboardEvents() throws Exception {
+        User admin = saveUser("Bruna Admin", "bruna-dashboard-events@example.com", UserRole.ADMIN);
+
+        mockMvc.perform(get("/api/dashboard/events")
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(admin)))
+                .andExpect(status().isOk())
+                .andExpect(request().asyncStarted());
     }
 
     @Test
