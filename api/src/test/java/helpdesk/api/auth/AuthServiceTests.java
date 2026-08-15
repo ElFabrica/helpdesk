@@ -6,15 +6,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import helpdesk.api.user.User;
 import helpdesk.api.user.UserRepository;
 import helpdesk.api.user.UserRole;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 @SpringBootTest
+@AutoConfigureMockMvc
 @Transactional
 class AuthServiceTests {
 
@@ -26,6 +37,12 @@ class AuthServiceTests {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtDecoder jwtDecoder;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @Test
     void registersRequesterWithEncodedPassword() {
@@ -63,5 +80,64 @@ class AuthServiceTests {
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting("statusCode")
                 .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void logsInWithValidCredentialsAndReturnsJwt() {
+        User user = userRepository.save(new User(
+                "Maria Login",
+                "maria-login@example.com",
+                passwordEncoder.encode("123456"),
+                UserRole.SOLICITANTE
+        ));
+
+        TokenResponse response = authService.login(new LoginRequest("maria-login@example.com", "123456"));
+        Jwt jwt = jwtDecoder.decode(response.token());
+
+        assertThat(response.type()).isEqualTo("Bearer");
+        assertThat(jwt.getSubject()).isEqualTo("maria-login@example.com");
+        assertThat(jwt.getClaimAsString("role")).isEqualTo(UserRole.SOLICITANTE.name());
+        assertThat(jwt.getClaimAsString("userId")).isEqualTo(user.getId().toString());
+        assertThat(Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())).isEqualTo(Duration.ofMinutes(30));
+    }
+
+    @Test
+    void rejectsInvalidCredentials() {
+        userRepository.save(new User(
+                "Maria Login",
+                "maria-invalid-password@example.com",
+                passwordEncoder.encode("123456"),
+                UserRole.SOLICITANTE
+        ));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest(
+                "maria-invalid-password@example.com",
+                "wrong-password"
+        )))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void loginEndpointReturnsBearerToken() throws Exception {
+        userRepository.save(new User(
+                "Maria Endpoint",
+                "maria-login-endpoint@example.com",
+                passwordEncoder.encode("123456"),
+                UserRole.SOLICITANTE
+        ));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "maria-login-endpoint@example.com",
+                                  "password": "123456"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("Bearer"))
+                .andExpect(jsonPath("$.token").isNotEmpty());
     }
 }
