@@ -35,6 +35,8 @@ public class DashboardRealtimeService {
             emitter.complete();
         });
         emitter.onError(error -> disconnect(emitter));
+
+        sendInitialConnectionComment(emitter);
     }
 
     public void send(String eventName, Object payload) {
@@ -47,6 +49,15 @@ public class DashboardRealtimeService {
 
     void disconnect(SseEmitter emitter) {
         emitters.remove(emitter);
+    }
+
+    private void sendInitialConnectionComment(SseEmitter emitter) {
+        try {
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException | IllegalStateException exception) {
+            disconnect(emitter);
+            emitter.completeWithError(exception);
+        }
     }
 
     private void send(SseEmitter emitter, String eventName, Object payload) {
