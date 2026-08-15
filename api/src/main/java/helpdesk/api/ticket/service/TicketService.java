@@ -4,7 +4,9 @@ import helpdesk.api.auth.AuthenticatedUser;
 import helpdesk.api.auth.service.AuthenticatedUserService;
 import helpdesk.api.dashboard.event.DashboardTicketCreatedEvent;
 import helpdesk.api.dashboard.event.DashboardTicketUpdatedEvent;
+import helpdesk.api.ticket.dto.CreateTicketCommentRequestDTO;
 import helpdesk.api.ticket.dto.CreateTicketRequestDTO;
+import helpdesk.api.ticket.dto.TicketCommentResponseDTO;
 import helpdesk.api.ticket.dto.TicketResponseDTO;
 import helpdesk.api.ticket.dto.TicketSummaryResponseDTO;
 import helpdesk.api.ticket.dto.UpdateTicketClassificationRequestDTO;
@@ -104,6 +106,31 @@ public class TicketService {
         ticketAuthorizationService.assertCanAccess(ticket);
 
         return TicketResponseDTO.from(ticket);
+    }
+
+    @Transactional
+    public TicketCommentResponseDTO addComment(Long ticketId, CreateTicketCommentRequestDTO request) {
+        Ticket ticket = findTicket(ticketId);
+        ticketAuthorizationService.assertCanAccess(ticket);
+
+        TicketComment savedComment = ticketCommentRepository.save(new TicketComment(
+                ticket,
+                authenticatedUserService.getAuthenticatedUserEntity(),
+                request.text()
+        ));
+
+        return TicketCommentResponseDTO.from(savedComment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketCommentResponseDTO> listComments(Long ticketId) {
+        Ticket ticket = findTicket(ticketId);
+        ticketAuthorizationService.assertCanAccess(ticket);
+
+        return ticketCommentRepository.findByTicketIdOrderByCreatedAtAsc(ticket.getId())
+                .stream()
+                .map(TicketCommentResponseDTO::from)
+                .toList();
     }
 
     @Transactional

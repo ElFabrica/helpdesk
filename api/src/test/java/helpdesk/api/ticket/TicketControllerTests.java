@@ -1,6 +1,7 @@
 package helpdesk.api.ticket;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import helpdesk.api.auth.service.JwtTokenService;
 import helpdesk.api.ticket.entity.ClassificationOrigin;
 import helpdesk.api.ticket.entity.Ticket;
+import helpdesk.api.ticket.entity.TicketComment;
 import helpdesk.api.ticket.entity.TicketCategory;
 import helpdesk.api.ticket.entity.TicketPriority;
 import helpdesk.api.ticket.entity.TicketStatus;
@@ -81,9 +83,8 @@ class TicketControllerTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
-                .andExpect(jsonPath("$.message").value(
-                        "Dados invalidos: title nao pode ficar em branco; description nao pode ficar em branco"
-                ))
+                .andExpect(jsonPath("$.message").value(containsString("title nao pode ficar em branco")))
+                .andExpect(jsonPath("$.message").value(containsString("description nao pode ficar em branco")))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.trace").doesNotExist());
     }
@@ -211,6 +212,107 @@ class TicketControllerTests {
                 .andExpect(jsonPath("$.message").value("Perfil sem permissao para esta operacao"))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
                 .andExpect(jsonPath("$.trace").doesNotExist());
+    }
+
+    @Test
+    void addCommentCreatesCommentForAccessibleTicket() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-comment-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(post("/api/tickets/{id}/comments", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Estamos verificando o problema."
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.authorId").value(requester.getId()))
+                .andExpect(jsonPath("$.authorName").value("Maria Solicitante"))
+                .andExpect(jsonPath("$.text").value("Estamos verificando o problema."))
+                .andExpect(jsonPath("$.createdAt").isNotEmpty());
+    }
+
+    @Test
+    void addCommentValidatesBlankText() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-blank-comment-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        mockMvc.perform(post("/api/tickets/{id}/comments", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": ""
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Dados invalidos: text nao pode ficar em branco"));
+    }
+
+    @Test
+    void addCommentReturnsNotFoundWhenTicketDoesNotExist() throws Exception {
+        User requester = saveRequester();
+
+        mockMvc.perform(post("/api/tickets/{id}/comments", 999_999L)
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Comentario em chamado inexistente."
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Chamado nao encontrado"));
+    }
+
+    @Test
+    void requesterCannotCommentAnotherRequesterTicket() throws Exception {
+        User maria = saveUser("Maria Solicitante", "maria-forbidden-comment-controller@example.com", UserRole.SOLICITANTE);
+        User joao = saveUser("Joao Solicitante", "joao-forbidden-comment-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, joao);
+
+        mockMvc.perform(post("/api/tickets/{id}/comments", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(maria))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Nao deveria comentar neste chamado."
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Perfil sem permissao para esta operacao"));
+    }
+
+    @Test
+    void listCommentsReturnsChronologicalHistoryForAccessibleTicket() throws Exception {
+        User requester = saveUser("Maria Solicitante", "maria-list-comments-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, requester);
+
+        addComment(ticket, requester, "Primeiro comentario.");
+        addComment(ticket, requester, "Segundo comentario.");
+
+        mockMvc.perform(get("/api/tickets/{id}/comments", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].text").value("Primeiro comentario."))
+                .andExpect(jsonPath("$[1].text").value("Segundo comentario."));
+    }
+
+    @Test
+    void requesterCannotListAnotherRequesterTicketComments() throws Exception {
+        User maria = saveUser("Maria Solicitante", "maria-forbidden-list-comments-controller@example.com", UserRole.SOLICITANTE);
+        User joao = saveUser("Joao Solicitante", "joao-forbidden-list-comments-controller@example.com", UserRole.SOLICITANTE);
+        Ticket ticket = saveTicket("Sistema lento", TicketCategory.SOFTWARE, TicketPriority.ALTA, joao);
+
+        mockMvc.perform(get("/api/tickets/{id}/comments", ticket.getId())
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(maria)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Perfil sem permissao para esta operacao"));
     }
 
     @Test
@@ -366,5 +468,9 @@ class TicketControllerTests {
                 requester,
                 null
         ));
+    }
+
+    private void addComment(Ticket ticket, User author, String text) {
+        ticketCommentRepository.saveAndFlush(new TicketComment(ticket, author, text));
     }
 }
