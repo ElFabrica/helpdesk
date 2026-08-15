@@ -38,7 +38,12 @@ class AuthorizationSecurityTests {
     @Test
     void protectedRouteWithoutTokenReturnsUnauthorized() throws Exception {
         mockMvc.perform(get("/api/security-test/protected"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Autenticacao necessaria"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test
@@ -59,7 +64,12 @@ class AuthorizationSecurityTests {
 
         mockMvc.perform(get("/api/security-test/admin")
                         .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").value("Acesso negado"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test
@@ -70,6 +80,20 @@ class AuthorizationSecurityTests {
                         .header("Authorization", "Bearer " + jwtTokenService.generateToken(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value(UserRole.ADMIN.name()));
+    }
+
+    @Test
+    void unexpectedErrorReturnsStandardErrorWithoutStackTrace() throws Exception {
+        User requester = saveUser("Erro Interno", "erro-interno@example.com", UserRole.SOLICITANTE);
+
+        mockMvc.perform(get("/api/security-test/unexpected-error")
+                        .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.error").value("Internal Server Error"))
+                .andExpect(jsonPath("$.message").value("Erro interno inesperado"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     private User saveUser(String name, String email, UserRole role) {
@@ -102,6 +126,11 @@ class AuthorizationSecurityTests {
             AuthenticatedUser user = authenticatedUserService.getAuthenticatedUser();
 
             return Map.of("role", user.role().name());
+        }
+
+        @GetMapping("/api/security-test/unexpected-error")
+        Map<String, Object> unexpectedError() {
+            throw new IllegalStateException("Falha interna detalhada");
         }
     }
 }

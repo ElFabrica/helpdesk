@@ -57,7 +57,12 @@ class TicketControllerTests {
                                   "description": "Nao consigo acessar o sistema financeiro desde cedo."
                                 }
                                 """))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Autenticacao necessaria"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test
@@ -73,7 +78,14 @@ class TicketControllerTests {
                                   "description": ""
                                 }
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value(
+                        "Dados invalidos: title nao pode ficar em branco; description nao pode ficar em branco"
+                ))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test
@@ -177,7 +189,12 @@ class TicketControllerTests {
 
         mockMvc.perform(get("/api/tickets/{id}", 999_999L)
                         .header("Authorization", "Bearer " + jwtTokenService.generateToken(requester)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Chamado nao encontrado"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test
@@ -188,7 +205,12 @@ class TicketControllerTests {
 
         mockMvc.perform(get("/api/tickets/{id}", ticket.getId())
                         .header("Authorization", "Bearer " + jwtTokenService.generateToken(maria)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.message").value("Perfil sem permissao para esta operacao"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test

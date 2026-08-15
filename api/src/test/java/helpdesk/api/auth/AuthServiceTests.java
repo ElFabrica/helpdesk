@@ -145,4 +145,55 @@ class AuthServiceTests {
                 .andExpect(jsonPath("$.type").value("Bearer"))
                 .andExpect(jsonPath("$.token").isNotEmpty());
     }
+
+    @Test
+    void registerEndpointReturnsConflictForDuplicateEmail() throws Exception {
+        userRepository.save(new User(
+                "Usuario Existente",
+                "duplicate-register-endpoint@example.com",
+                passwordEncoder.encode("123456"),
+                UserRole.SOLICITANTE
+        ));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Outro Usuario",
+                                  "email": "duplicate-register-endpoint@example.com",
+                                  "password": "654321"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value("E-mail ja cadastrado"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
+    }
+
+    @Test
+    void loginEndpointReturnsUnauthorizedForInvalidCredentials() throws Exception {
+        userRepository.save(new User(
+                "Maria Endpoint",
+                "maria-login-invalid-endpoint@example.com",
+                passwordEncoder.encode("123456"),
+                UserRole.SOLICITANTE
+        ));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "maria-login-invalid-endpoint@example.com",
+                                  "password": "wrong-password"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Credenciais invalidas"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.trace").doesNotExist());
+    }
 }
