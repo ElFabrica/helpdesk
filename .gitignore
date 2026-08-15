@@ -4,4 +4,5 @@
 
 web/node_modules/
 web/dist/
+web/.pnpm-store/
 docs/spacks/
