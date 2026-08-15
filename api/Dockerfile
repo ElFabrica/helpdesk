@@ -1,10 +1,6 @@
-FROM eclipse-temurin:21-jdk AS dev
+FROM eclipse-temurin:21-jdk AS build
 
 WORKDIR /app
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends inotify-tools \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
@@ -14,6 +10,15 @@ RUN chmod +x ./mvnw \
 
 COPY src src
 
+RUN ./mvnw clean package -DskipTests
+
+
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app
+
+COPY --from=build /app/target/api-0.0.1-SNAPSHOT.jar app.jar
+
 EXPOSE 8080
 
-CMD ["bash", "-lc", "while true; do ./mvnw spring-boot:run & app_pid=$!; inotifywait -r -e modify,create,delete,move src pom.xml & watch_pid=$!; wait -n $app_pid $watch_pid; kill $app_pid $watch_pid 2>/dev/null || true; wait $app_pid $watch_pid 2>/dev/null || true; sleep 1; done"]
+CMD ["java", "-jar", "app.jar"]
