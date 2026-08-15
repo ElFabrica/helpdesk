@@ -46,7 +46,7 @@ class AuthServiceTests {
 
     @Test
     void registersRequesterWithEncodedPassword() {
-        UserResponse response = authService.register(new RegisterRequest(
+        UserResponseDTO response = authService.register(new RegisterRequestDTO(
                 "Maria Silva",
                 "maria-register@example.com",
                 "123456"
@@ -72,7 +72,7 @@ class AuthServiceTests {
                 UserRole.SOLICITANTE
         ));
 
-        assertThatThrownBy(() -> authService.register(new RegisterRequest(
+        assertThatThrownBy(() -> authService.register(new RegisterRequestDTO(
                 "Outro Usuario",
                 "duplicate-register@example.com",
                 "654321"
@@ -91,7 +91,7 @@ class AuthServiceTests {
                 UserRole.SOLICITANTE
         ));
 
-        TokenResponse response = authService.login(new LoginRequest("maria-login@example.com", "123456"));
+        TokenResponseDTO response = authService.login(new LoginRequestDTO("maria-login@example.com", "123456"));
         Jwt jwt = jwtDecoder.decode(response.token());
 
         assertThat(response.type()).isEqualTo("Bearer");
@@ -110,7 +110,7 @@ class AuthServiceTests {
                 UserRole.SOLICITANTE
         ));
 
-        assertThatThrownBy(() -> authService.login(new LoginRequest(
+        assertThatThrownBy(() -> authService.login(new LoginRequestDTO(
                 "maria-invalid-password@example.com",
                 "wrong-password"
         )))

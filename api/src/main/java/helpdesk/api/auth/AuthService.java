@@ -27,7 +27,7 @@ public class AuthService {
     }
 
     @Transactional
-    public UserResponse register(RegisterRequest request) {
+    public UserResponseDTO register(RegisterRequestDTO request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail ja cadastrado");
         }
@@ -39,11 +39,11 @@ public class AuthService {
                 UserRole.SOLICITANTE
         );
 
-        return UserResponse.from(userRepository.save(user));
+        return UserResponseDTO.from(userRepository.save(user));
     }
 
     @Transactional(readOnly = true)
-    public TokenResponse login(LoginRequest request) {
+    public TokenResponseDTO login(LoginRequestDTO request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(this::invalidCredentials);
 
@@ -51,7 +51,7 @@ public class AuthService {
             throw invalidCredentials();
         }
 
-        return TokenResponse.bearer(jwtTokenService.generateToken(user));
+        return TokenResponseDTO.bearer(jwtTokenService.generateToken(user));
     }
 
     private ResponseStatusException invalidCredentials() {
